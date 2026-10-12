@@ -1,0 +1,9 @@
+TPPL PMS frontend deployment package
+Target: IIS application at /TPPL/
+Router: hash
+Base path: /TPPL/
+Archive layout: index.html, assets/, web.config and BUILD_INFO.txt at ZIP root
+UI release: quarterly KPI setup and quick Tazai
+
+This file identifies the IIS package. GitHub Pages is built separately from
+the same source and uses the /tppl_pms/ base path.

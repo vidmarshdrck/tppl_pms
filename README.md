@@ -50,7 +50,7 @@ Local preview: http://127.0.0.1:4300/. Build output: `dist/`.
 
 GitHub Actions deploys `main` to GitHub Pages. The build derives its base path from the repository name. The generated `404.html` lets the client router render deep links.
 
-The repository's `dist.zip` is the separate Windows/IIS deployment package. It uses relative asset paths and hash routing, so IIS does not need the URL Rewrite module. Extract its contents into the configured static-site folder and serve them over HTTP; do not use the source repository as the IIS web root.
+The repository's `dist.zip` is the separate Windows/IIS deployment package. It uses the `/TPPL/` base path and hash routing, so IIS does not need the URL Rewrite module. The archive includes `web.config` and `BUILD_INFO.txt` at its root. Extract its contents into the configured `/TPPL/` static-site folder; do not use the source repository as the IIS web root.
 
 ## Department KPI setup
 
