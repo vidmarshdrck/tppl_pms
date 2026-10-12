@@ -50,6 +50,8 @@ Local preview: http://127.0.0.1:4300/. Build output: `dist/`.
 
 GitHub Actions deploys `main` to GitHub Pages. The build derives its base path from the repository name. The generated `404.html` lets the client router render deep links.
 
+The repository's `dist.zip` is the separate Windows/IIS deployment package. It uses relative asset paths and hash routing, so IIS does not need the URL Rewrite module. Extract its contents into the configured static-site folder and serve them over HTTP; do not use the source repository as the IIS web root.
+
 ## Department KPI setup
 
 As General Manager, open **KPI → KPI setup**. Define or edit each department’s reusable KPIs, review the targets and actual data sources, then activate them for the required year and quarter. Activation creates a fixed copy; later edits apply to future activations. Department users enter the assigned actuals and select **Submit**. GM approval publishes the results to the register, department scorecards, balanced scorecard and executive overview. Automatic actuals require approved Finance or Operations book entries for that same quarter.
