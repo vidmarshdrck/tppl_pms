@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/AuthContext.jsx'
 import { hasPermission } from '../../auth/permissions.js'
 import { departmentsWithPublishedKpis } from '../../lib/departmentsWithPublishedKpis.js'
 import { useKpiSubmissionsVersion } from '../../lib/useKpiSubmissionsVersion.js'
+import { formatKpiDifference } from '../../lib/kpiDifference.js'
 
 const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
 
@@ -71,7 +72,7 @@ function KpiRow({ kpi, months, department }) {
       <td className="numeric">{kpi.weight}</td>
       <td className="numeric">{formatValue(kpi.target, kpi.unit)}</td>
       <td className="numeric font-semibold text-slate-800">{formatValue(periodActual(kpi, months), kpi.unit)}</td>
-      <td className="numeric font-semibold text-slate-800">{formatScore(kpi.achievement)}</td>
+      <td className="numeric font-semibold text-slate-800">{formatKpiDifference(periodActual(kpi, months), kpi.target, kpi.unit)}</td>
       <td><Sparkline values={monthly} color={kpiStatus.color} /></td>
       <td><StatusBadge label={kpiStatus.label} tone={kpiStatus.badgeTone} /></td>
     </>
@@ -256,7 +257,7 @@ export default function DepartmentScorecards() {
                         <th className="numeric">Weight</th>
                         <th className="numeric">Target</th>
                         <th className="numeric">Actual</th>
-                        <th className="numeric">Achievement</th>
+                        <th className="numeric" title="Actual minus target">Difference</th>
                         <th>Trend</th>
                         <th>Status</th>
                       </tr>
@@ -292,7 +293,7 @@ export default function DepartmentScorecards() {
                           <th className="numeric">Weight</th>
                           <th className="numeric">Target</th>
                           <th className="numeric">Actual</th>
-                          <th className="numeric">Achievement</th>
+                          <th className="numeric" title="Actual minus target">Difference</th>
                           <th>Trend</th>
                           <th>Status</th>
                         </tr>

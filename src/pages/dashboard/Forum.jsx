@@ -1,6 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, Outlet, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ThumbsUp, ThumbsDown, MessageCircle, Flag, ImagePlus, X, Trash2, ShieldAlert, Eye, ArrowLeft, Megaphone, CalendarDays, ScrollText, User, Plus, Tag, EyeOff, MapPin, Filter } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, MessageCircle, Flag, ImagePlus, X, Trash2, ShieldAlert, Eye, ArrowLeft, Megaphone, CalendarDays, ScrollText, User, Pencil, Share2, Tag, EyeOff, MapPin, Filter } from 'lucide-react'
+import ForumProfileHeader from '../../components/ui/ForumProfileHeader.jsx'
+import PostImages from '../../components/ui/PostImages.jsx'
+import { useUserProfiles } from '../../lib/userProfiles.js'
+import ForumHighlights from '../../components/ui/ForumHighlights.jsx'
 import { StatusBadge } from '../../components/ui/StatusBadge.jsx'
 import { InlineMessage } from '../../components/ui/InlineMessage.jsx'
 import { useAuth } from '../../auth/AuthContext.jsx'
@@ -9,6 +13,7 @@ import {
   subscribeToForum, getFeed, upcomingEvents, getComments, createPost, deletePost, addComment, removeComment, toggleReaction,
   report, getModerationQueue, POST_TYPES, resolveReport, restorePost, validateImage, presentAuthor, canModerate, timeAgo,
 } from '../../lib/forumStore.js'
+import { useProfilePhotos } from '../../lib/profilePhotos.js'
 import { hasPermission } from '../../auth/permissions.js'
 
 function useForumVersion() {
@@ -40,10 +45,13 @@ const fmtEvent = (ts) => new Date(ts).toLocaleString([], { weekday: 'short', day
 
 const HUES = ['#B42318', '#0F766E', '#4338CA', '#B45309', '#475569', '#7C3AED']
 function Avatar({ item, size = 40 }) {
+  const photos = useProfilePhotos()
+  const profiles = useUserProfiles()
+  const photo = item.showName ? photos[item.authorId] : null
   const n = Number(String(item.staffNo).replace(/\D/g, '')) || 0
   return (
     <span className="flex flex-shrink-0 items-center justify-center rounded-full text-white" style={{ width: size, height: size, background: HUES[n % HUES.length] }} aria-hidden="true">
-      {item.showName ? <span className="text-xs font-bold">{item.displayName.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}</span> : <User size={size * 0.5} />}
+      {photo ? <img src={photo} alt="" className="h-full w-full rounded-full object-cover" /> : item.showName ? <span className="text-xs font-bold">{(profiles[item.authorId]?.displayName || item.displayName).split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}</span> : <User size={size * 0.5} />}
     </span>
   )
 }
@@ -58,13 +66,14 @@ function RailCard({ icon: Icon, title, children }) {
   )
 }
 
-function RightRail() {
+function RightRail({ showHighlights = true }) {
   const { user } = useAuth()
   const version = useForumVersion()
   const announcements = useMemo(() => getFeed(user).filter((p) => p.status === 'VISIBLE' && p.type === 'ANNOUNCEMENT').slice(0, 3), [user, version]) // eslint-disable-line react-hooks/exhaustive-deps
   const events = useMemo(() => upcomingEvents(user), [user, version]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="space-y-4">
+      {showHighlights && <ForumHighlights />}
       <RailCard icon={Megaphone} title="Announcements">
         {announcements.length ? (
           <ul className="space-y-3">{announcements.map((a) => (
@@ -97,13 +106,10 @@ export default function Forum() {
   return (
     <div className="forum-ui -mx-4 -mt-4 grid max-w-5xl gap-6 sm:mx-auto sm:mt-0 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0">
-        <div className="mx-auto max-w-2xl overflow-hidden bg-white sm:rounded-3xl sm:shadow-[0_8px_30px_-12px_rgba(16,24,40,0.12)] lg:max-w-none">
+        <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl bg-white sm:rounded-3xl sm:shadow-[0_8px_30px_-12px_rgba(16,24,40,0.12)] lg:max-w-none">
           <Outlet context={{ user }} />
         </div>
-        <details className="mx-4 mt-4 rounded-3xl bg-white p-5 shadow-[0_8px_30px_-12px_rgba(16,24,40,0.12)] sm:mx-0 lg:hidden">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-800">Announcements, events &amp; guidelines</summary>
-          <div className="mt-4"><RightRail /></div>
-        </details>
+        <div className="mx-4 mt-4 sm:mx-0 lg:hidden"><RightRail /></div>
       </div>
       <aside className="hidden lg:block"><div className="sticky top-0 space-y-4"><RightRail /></div></aside>
     </div>
@@ -120,7 +126,8 @@ function Composer({ placeholder = "What's happening at TPPL?", onPosted, compact
   const [eventAt, setEventAt] = useState('')
   const [location, setLocation] = useState('')
   const canAnnounce = hasPermission(user, 'forum.announce')
-  const [image, setImage] = useState(null)
+  const [images, setImages] = useState([])
+  const [readingImages, setReadingImages] = useState(false)
   const [error, run] = useAction()
   const fileRef = useRef(null)
   const areaRef = useRef(null)
@@ -133,27 +140,31 @@ function Composer({ placeholder = "What's happening at TPPL?", onPosted, compact
     el.style.height = `${Math.min(el.scrollHeight, 320)}px`
   }
 
-  function pickFile(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const problem = validateImage(file)
-    if (problem) { run(() => { throw new Error(problem) }); e.target.value = ''; return }
-    const reader = new FileReader()
-    reader.onload = () => setImage(reader.result)
-    reader.readAsDataURL(file)
+  async function pickFile(e) {
+    const files = [...(e.target.files || [])]
+    if (!files.length) return
+    setReadingImages(true)
+    try {
+      if (images.length + files.length > 5) throw new Error('Choose up to five images per post.')
+      for (const file of files) { const problem = validateImage(file); if (problem) throw new Error(problem) }
+      if (images.reduce((size, src) => size + src.length * 0.75, 0) + files.reduce((size, file) => size + file.size, 0) > 2 * 1024 * 1024) throw new Error('Keep the combined images below 2 MB.')
+      const added = await Promise.all(files.map(file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('An image could not be opened. Try again.')); reader.readAsDataURL(file) })))
+      setImages(current => [...current, ...added]); run(() => {})
+    } catch (cause) { run(() => { throw cause }) }
+    finally { setReadingImages(false); e.target.value = '' }
   }
 
   function submit(e) {
     e.preventDefault()
-    const ok = run(() => { const p = createPost(user, { text, category, showName, image, type, eventAt, location }); onPosted?.(p) })
+    const ok = run(() => { const p = createPost(user, { text, category, showName, images, type, eventAt, location }); onPosted?.(p) })
     if (ok) {
-      setText(''); setCategory(''); setImage(null); setType('POST'); setEventAt(''); setLocation('')
+      setText(''); setCategory(''); setImages([]); setType('POST'); setEventAt(''); setLocation('')
       if (fileRef.current) fileRef.current.value = ''
       if (areaRef.current) areaRef.current.style.height = 'auto'
     }
   }
 
-  const me = { staffNo: 'EMP-0', showName, displayName: user.name }
+  const me = { authorId: user.id, staffNo: 'EMP-0', showName, displayName: user.name }
   const iconBtn = 'flex h-9 w-9 items-center justify-center rounded-full text-[#B42318] hover:bg-[#FDECEC]'
   return (
     <form onSubmit={submit} className="flex gap-3 border-b border-slate-200 px-4 pb-3 pt-4">
@@ -162,7 +173,7 @@ function Composer({ placeholder = "What's happening at TPPL?", onPosted, compact
         <textarea
           ref={areaRef} value={text} rows={1} maxLength={MAX_TEXT} aria-label="Create post" placeholder={placeholder}
           onChange={(e) => { setText(e.target.value); grow(e.target) }}
-          className="block min-h-[44px] w-full resize-none border-0 bg-transparent p-0 py-2.5 text-xl leading-6 text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-0"
+          className="forum-composer-input block w-full resize-none border-0"
         />
         {(category || !showName || type !== 'POST') && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -178,14 +189,10 @@ function Composer({ placeholder = "What's happening at TPPL?", onPosted, compact
           </div>
         )}
         {SENSITIVE_CATEGORIES.includes(category) && <div className="mb-2"><InlineMessage tone="neutral">Please provide factual information and avoid personal attacks or unverified accusations.</InlineMessage></div>}
-        {image && (
-          <div className="relative mb-2 inline-block">
-            <img src={image} alt="Selected upload preview" className="max-h-56 rounded-2xl border border-slate-200" />
-            <button type="button" aria-label="Remove image" onClick={() => { setImage(null); if (fileRef.current) fileRef.current.value = '' }} className="absolute right-2 top-2 rounded-full bg-slate-900/80 p-1.5 text-white"><X size={14} /></button>
-          </div>
-        )}
+        {images.length > 0 && <div className="mb-3 flex gap-2 overflow-x-auto" aria-label="Selected photos">{images.map((src, index) => <div key={index} className="relative h-28 w-28 shrink-0 rounded-xl bg-slate-100"><img src={src} alt={`Selected photo ${index + 1}`} className="h-full w-full rounded-xl object-contain" /><button type="button" aria-label={`Remove photo ${index + 1}`} onClick={() => setImages(current => current.filter((_, i) => i !== index))} className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/80 text-white"><X size={14} /></button></div>)}</div>}
+        {readingImages && <p role="status" className="mb-2 text-xs text-slate-500">Reading photos…</p>}
         <div className="-ml-2 flex items-center gap-0.5">
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={pickFile} className="hidden" id={fileId} />
+          <input ref={fileRef} type="file" multiple disabled={readingImages} accept="image/jpeg,image/png,image/webp,image/gif" onChange={pickFile} className="hidden" id={fileId} />
           <label htmlFor={fileId} aria-label="Add photo" title="Add photo" className={`${iconBtn} cursor-pointer`}><ImagePlus size={19} /></label>
           {canAnnounce && !compact && (
             <label className={`${iconBtn} relative cursor-pointer`} title="Post type">
@@ -207,7 +214,7 @@ function Composer({ placeholder = "What's happening at TPPL?", onPosted, compact
           <button type="button" onClick={() => setShowName((v) => !v)} aria-pressed={showName} aria-label="Show my name" title={showName ? 'Your name and staff number are shown. Tap to show only your staff number.' : 'Only your staff number is shown. Tap to show your name too.'} className={`${iconBtn} ${showName ? '' : 'bg-[#FDECEC]'}`}>
             {showName ? <Eye size={19} /> : <EyeOff size={19} />}
           </button>
-          <button type="submit" disabled={!text.trim()} className="forum-press ml-auto h-9 rounded-full bg-[#B42318] px-5 text-[15px] font-bold text-white disabled:bg-[#B42318]/40">{compact ? 'Reply' : 'Post'}</button>
+          <button type="submit" disabled={!text.trim() || readingImages} className="forum-press ml-auto h-9 rounded-full bg-[#B42318] px-5 text-[15px] font-bold text-white disabled:bg-[#B42318]/40">{compact ? 'Reply' : 'Post'}</button>
         </div>
         {text.trim() && <p className="mt-2 text-[11px] text-slate-400">{showName ? 'Colleagues will see your name and staff number.' : 'Colleagues will see only your staff number.'} Administrators can always see who posted.</p>}
         <InlineMessage tone="negative">{error}</InlineMessage>
@@ -243,6 +250,8 @@ function PostRow({ post, detail = false }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [error, run] = useAction()
+  useUserProfiles()
+  const [shareMessage, setShareMessage] = useState(''), [shareLink, setShareLink] = useState('')
   const who = presentAuthor(post, user)
   const removed = post.status !== 'VISIBLE'
   const stop = (fn) => (e) => { e.stopPropagation(); fn() }
@@ -252,6 +261,15 @@ function PostRow({ post, detail = false }) {
       <Icon size={17} fill={active ? 'currentColor' : 'none'} />{count}
     </button>
   )
+  async function sharePost() {
+    const url = `${window.location.origin}${import.meta.env.BASE_URL}${import.meta.env.VITE_ROUTER === 'hash' ? '#/' : ''}forum/${post.id}`
+    setShareMessage(''); setShareLink('')
+    try {
+      if (navigator.share) { await navigator.share({ title: 'TPPL Forum', text: post.text.slice(0, 150), url }); setShareMessage('Post shared.') }
+      else if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(url); setShareMessage('Post link copied.') }
+      else { setShareLink(url); setShareMessage('Copy this link to share the post.') }
+    } catch (cause) { if (cause.name !== 'AbortError') { setShareLink(url); setShareMessage('Copy this link to share the post.') } }
+  }
   const open = () => { if (!detail) navigate(`/forum/${post.id}`) }
   return (
     <article
@@ -282,14 +300,17 @@ function PostRow({ post, detail = false }) {
             {post.location && <span className="inline-flex items-center gap-1"><MapPin size={13} className="text-[#B42318]" />{post.location}</span>}
           </div>
         )}
-        {post.image && <img src={post.image} alt="Attached by the author" loading="lazy" className="mt-3 max-h-[28rem] w-full rounded-2xl border border-slate-200 object-cover" />}
+        <PostImages images={post.images?.length ? post.images : post.image ? [post.image] : []} />
         {detail && <div className="mt-3 text-xs text-slate-500">{new Date(post.createdAt).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}</div>}
         <div className="-ml-3 mt-2 flex items-center gap-1">
           {react('LIKE', ThumbsUp, post.likes, post.myReaction === 'LIKE', 'Like')}
           {react('DISLIKE', ThumbsDown, post.dislikes, post.myReaction === 'DISLIKE', 'Dislike')}
-          <span className="flex h-10 items-center gap-1.5 px-3 text-sm text-slate-500"><MessageCircle size={17} />{post.commentCount}</span>
+          <Link to={`/forum/${post.id}`} aria-label={`Comments (${post.commentCount})`} onClick={event => event.stopPropagation()} className="flex h-11 items-center gap-1.5 rounded-full px-2 text-sm text-slate-500 hover:bg-slate-100"><MessageCircle size={17} />{post.commentCount}</Link>
+          <button type="button" disabled={removed} aria-label="Share post" onClick={stop(sharePost)} className="flex h-11 items-center gap-1.5 rounded-full px-2 text-sm text-slate-500 hover:bg-slate-100"><Share2 size={17} /><span className="hidden sm:inline">Share</span></button>
           {removed && canModerate(user) && <button type="button" onClick={stop(() => run(() => restorePost(user, post.id)))} className="ml-auto rounded-full px-3 text-xs text-slate-600 hover:bg-slate-100">Restore</button>}
         </div>
+        <p role="status" className="text-xs text-slate-600">{shareMessage}</p>
+        {shareLink && <input readOnly aria-label="Post share link" value={shareLink} onClick={event => { event.stopPropagation(); event.target.select() }} className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-sm" />}
         <InlineMessage tone="negative">{error}</InlineMessage>
       </div>
     </article>
@@ -308,22 +329,32 @@ const EMPTY = {
   feed: 'No posts yet.', announcements: 'No announcements yet.', events: 'No events yet.',
 }
 
-export function ForumFeed() {
+export function ForumFeed({ profile = false }) {
   const { user } = useAuth()
   const version = useForumVersion()
   const [params, setParams] = useSearchParams()
   const tab = FEED_TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'foryou'
   const [filter, setFilter] = useState('')
   const [sheet, setSheet] = useState(false)
+  const sheetRef = useRef(null)
   useEffect(() => {
     if (!sheet) return undefined
-    const onKey = (e) => { if (e.key === 'Escape') setSheet(false) }
+    const previous = document.activeElement
+    sheetRef.current?.querySelector('textarea')?.focus()
+    const onKey = (event) => {
+      if (event.key === 'Escape') setSheet(false)
+      if (event.key !== 'Tab') return
+      const controls = [...sheetRef.current.querySelectorAll('button:not(:disabled), input:not(:disabled):not([type="file"]), textarea, select')]
+      const first = controls[0], last = controls.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey); previous?.focus() }
   }, [sheet])
   const feed = useMemo(() => getFeed(user), [user, version]) // eslint-disable-line react-hooks/exhaustive-deps
   const byTab = {
-    foryou: feed.filter((p) => p.type === 'POST' && p.involvesMe),
+    foryou: feed.filter((p) => p.type === 'POST' && (profile ? p.authorId === user.id : p.involvesMe)),
     feed: feed.filter((p) => p.type === 'POST'),
     announcements: feed.filter((p) => p.type === 'ANNOUNCEMENT'),
     events: feed.filter((p) => p.type === 'EVENT').sort((a, b) => a.eventAt - b.eventAt),
@@ -332,20 +363,20 @@ export function ForumFeed() {
   const shown = showFilter && filter ? byTab[tab].filter((p) => p.category === filter) : byTab[tab]
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="flex items-start gap-3 px-4 pt-4">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-bold leading-tight text-slate-900">TPPL Forum</h2>
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-              <span>Staff Voice</span><span aria-hidden="true" className="text-slate-300">•</span>
-              <span>Workplace Discussion</span><span aria-hidden="true" className="text-slate-300">•</span>
+      <header className={`forum-brand-header z-10 border-b border-[#8F1C13] text-white ${profile ? '' : 'sticky top-0'}`}>
+        {profile ? <ForumProfileHeader /> : <div className="flex flex-wrap items-start gap-3 px-4 pt-4">
+          <div className="min-w-0 flex-1 basis-full sm:basis-0">
+            <h2 className="text-xl font-bold leading-tight text-white">TPPL Forum</h2>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-white/90">
+              <span>Staff Voice</span><span aria-hidden="true" className="text-white/60">•</span>
+              <span>Workplace Discussion</span><span aria-hidden="true" className="text-white/60">•</span>
               <span>Safety &amp; Integrity</span>
             </p>
           </div>
           <div className="flex flex-shrink-0 items-center gap-2">
             {showFilter && (
-              <label className="relative flex h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-3 pr-2 text-sm text-slate-700">
-                <Filter size={14} className="text-slate-500" aria-hidden="true" />
+              <label className="relative flex h-10 items-center gap-1.5 rounded-full border border-white/40 bg-[#8F1C13] pl-3 pr-2 text-sm text-white">
+                <Filter size={14} className="text-white/90" aria-hidden="true" />
                 <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter by category" className="max-w-[9.5rem] cursor-pointer appearance-none truncate bg-transparent pr-1 text-sm focus:outline-none">
                   <option value="">All categories</option>
                   {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
@@ -353,19 +384,19 @@ export function ForumFeed() {
               </label>
             )}
             {canModerate(user) && (
-              <Link to="/forum/moderation" aria-label="Moderation" title="Moderation" className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50"><ShieldAlert size={17} /></Link>
+              <Link to="/forum/moderation" aria-label="Moderation" title="Moderation" className="flex h-10 w-10 items-center justify-center rounded-full border border-white/40 text-white hover:bg-white/15"><ShieldAlert size={17} /></Link>
             )}
           </div>
-        </div>
+        </div>}
         <nav className="mt-2 flex" aria-label="Forum sections">
           {FEED_TABS.map((t) => {
             const active = tab === t.id
             return (
               <button key={t.id} type="button" onClick={() => setParams(t.id === 'foryou' ? {} : { tab: t.id })} aria-current={active ? 'page' : undefined}
-                className={`flex flex-1 justify-center px-1 py-3.5 text-[13px] hover:bg-slate-50 sm:text-[15px] ${active ? 'font-bold text-slate-900' : 'font-medium text-slate-500'}`}>
+                className={`flex flex-1 justify-center px-1 py-3.5 text-[13px] hover:bg-white/15 sm:text-[15px] ${active ? 'font-bold text-white' : 'font-medium text-white/85'}`}>
                 <span className="relative whitespace-nowrap">
                   {t.label}
-                  {active && <span className="absolute -bottom-3.5 left-0 right-0 h-1 rounded-full bg-[#B42318]" />}
+                  {active && <span className="absolute -bottom-3.5 left-0 right-0 h-1 rounded-full bg-white" />}
                 </span>
               </button>
             )
@@ -373,13 +404,13 @@ export function ForumFeed() {
         </nav>
       </header>
       <div className="hidden md:block"><Composer /></div>
-      {shown.length ? shown.map((p) => <PostRow key={p.id} post={p} />) : <p className="px-6 py-12 text-center text-sm text-slate-500">{EMPTY[tab]}</p>}
+      {shown.length ? shown.map((p) => <PostRow key={p.id} post={p} />) : <p className="px-6 py-12 text-center text-sm text-slate-500">{profile && tab === 'foryou' ? 'Your posts will appear here. Share your first update below.' : EMPTY[tab]}</p>}
       <div className="h-28 md:hidden" aria-hidden="true" />
-      <button type="button" onClick={() => setSheet(true)} aria-label="Create post" className="forum-press fixed bottom-24 right-5 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-[#B42318] text-white shadow-[0_10px_24px_-8px_rgba(180,35,24,0.65)] md:hidden"><Plus size={26} /></button>
+      <button type="button" onClick={() => setSheet(true)} aria-label="Create post" className="forum-press fixed bottom-24 right-5 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-[#B42318] text-white shadow-[0_10px_24px_-8px_rgba(180,35,24,0.65)] md:bottom-6"><Pencil size={23} /></button>
       {sheet && (
-        <div className="fixed inset-0 z-[80] md:hidden" role="dialog" aria-modal="true" aria-label="New post">
+        <div ref={sheetRef} className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="New post">
           <button type="button" aria-label="Close" onClick={() => setSheet(false)} className="forum-fade absolute inset-0 bg-slate-900/40" />
-          <div className="forum-sheet absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-y-auto rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_-12px_rgba(16,24,40,0.3)]">
+          <div className="forum-sheet absolute inset-x-0 bottom-0 mx-auto max-h-[92dvh] max-w-2xl overflow-y-auto rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_-12px_rgba(16,24,40,0.3)]">
             <div className="flex items-center justify-between px-4 pt-3">
               <span className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" aria-hidden="true" />
             </div>
@@ -399,6 +430,7 @@ export function ForumFeed() {
 function Reply({ c }) {
   const { user } = useAuth()
   const [error, run] = useAction()
+  useUserProfiles()
   const who = presentAuthor(c, user)
   return (
     <article className="flex gap-3 border-b border-slate-200 p-4">
@@ -428,7 +460,7 @@ function ReplyBox({ postId }) {
   const [text, setText] = useState('')
   const [showName, setShowName] = useState(true)
   const [error, run] = useAction()
-  const me = { staffNo: 'EMP-0', showName, displayName: user.name }
+  const me = { authorId: user.id, staffNo: 'EMP-0', showName, displayName: user.name }
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (run(() => addComment(user, postId, { text, showName }))) setText('') }} className="flex gap-3 border-b border-slate-200 p-4">
       <Avatar item={me} size={36} />

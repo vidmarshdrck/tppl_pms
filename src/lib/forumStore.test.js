@@ -85,3 +85,36 @@ test('validates text, images and report reasons', () => {
   assert.equal(p.image, null)
   assert.throws(() => store.report(other, { kind: 'POST', id: p.id, reason: 'nonsense' }))
 })
+
+test('multi-image posts retain order and reject invalid or oversized galleries', () => {
+  const images = ['data:image/png;base64,AAAA', 'data:image/jpeg;base64,BBBB']
+  const post = store.createPost(staff, { text: 'Photo update', images, showName: true })
+  assert.deepEqual(store.getFeed(other).find(item => item.id === post.id).images, images)
+  assert.throws(() => store.createPost(staff, { text: 'Too many', images: Array(6).fill(images[0]) }), /five/)
+  assert.throws(() => store.createPost(staff, { text: 'Bad image', images: ['data:text/html;base64,AAAA'] }), /valid/)
+  assert.throws(() => store.createPost(staff, { text: 'Too large', images: ['data:image/png;base64,' + 'A'.repeat(3 * 1024 * 1024)] }), /2 MB/)
+  const legacy = store.createPost(staff, { text: 'Legacy image', image: images[0] })
+  assert.equal(store.getFeed(other).find(item => item.id === legacy.id).image, images[0])
+})
+
+test('display names update old posts without exposing names on anonymous posts', async () => {
+  const { saveUserProfile, getUserProfile } = await import('./userProfiles.js')
+  const named = store.createPost(staff, { text: 'Named post', showName: true })
+  const anonymous = store.createPost(staff, { text: 'Anonymous post', showName: false })
+  saveUserProfile(staff, { displayName: 'ChatGPT', bio: 'Working together.', joinedOn: '2020-02-29' })
+  assert.equal(getUserProfile(staff.id).displayName, 'ChatGPT')
+  assert.equal(getUserProfile(other.id).displayName, undefined)
+  assert.match(store.presentAuthor(named, other).label, /^ChatGPT/)
+  assert.equal(store.presentAuthor(anonymous, other).label, anonymous.staffNo)
+  assert.equal(staff.username, 'finance_staff')
+  assert.throws(() => saveUserProfile(staff, { displayName: '', bio: '' }), /display name/)
+  assert.throws(() => saveUserProfile(staff, { displayName: 'Valid', joinedOn: '2025-02-30' }), /valid joining date/)
+  assert.throws(() => saveUserProfile(staff, { displayName: 'Valid', joinedOn: '2099-01-01' }), /valid joining date/)
+})
+
+test('storage failure is reported instead of claiming the post was saved', () => {
+  const setItem = localStorage.setItem
+  localStorage.setItem = () => { throw new Error('Quota exceeded') }
+  try { assert.throws(() => store.createPost(staff, { text: 'Keep this draft' }), /could not be saved/) }
+  finally { localStorage.setItem = setItem }
+})

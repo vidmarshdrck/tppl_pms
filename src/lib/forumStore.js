@@ -10,6 +10,7 @@
 // "Show my name" is presentation-level privacy: `authorId` is always stored
 // and moderators can always see it.
 
+import { getUserProfile } from './userProfiles.js'
 import { hasPermission } from '../auth/permissions.js'
 
 const STORE_KEY = 'vpms-forum-v2'
@@ -72,7 +73,7 @@ function read() {
 function write(store) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store))
-  } catch { /* storage unavailable or full — change is lost on reload */ }
+  } catch { throw new Error('Your change could not be saved. Free some browser storage and try again.') }
   window.dispatchEvent(new Event(CHANGE_EVENT))
 }
 
@@ -115,7 +116,7 @@ function author(user, showName) {
   return {
     authorId: user.id,
     staffNo: staffNumberFor(user),
-    displayName: user.name,
+    displayName: getUserProfile(user.id).displayName || user.name,
     showName: Boolean(showName),
     department: user.departmentId ?? null,
   }
@@ -123,7 +124,8 @@ function author(user, showName) {
 
 /** What other staff see. Moderators additionally get the real author. */
 export function presentAuthor(item, viewer) {
-  const label = item.showName ? `${item.displayName} · ${item.staffNo}` : item.staffNo
+  const displayName = getUserProfile(item.authorId).displayName || item.displayName
+  const label = item.showName ? `${displayName} · ${item.staffNo}` : item.staffNo
   return { label, trueAuthor: canModerate(viewer) ? `${item.displayName} (${item.authorId})` : null }
 }
 
@@ -175,7 +177,7 @@ export function validateImage(file) {
 
 export const POST_TYPES = ['POST', 'ANNOUNCEMENT', 'EVENT']
 
-export function createPost(user, { text, category, showName, image, type = 'POST', eventAt, location }) {
+export function createPost(user, { text, category, showName, image, images, type = 'POST', eventAt, location }) {
   requireUser(user)
   if (!POST_TYPES.includes(type)) throw new Error('Invalid post type.')
   if (type !== 'POST' && !hasPermission(user, 'forum.announce')) throw new Error('Only management can publish announcements and events.')
@@ -184,12 +186,17 @@ export function createPost(user, { text, category, showName, image, type = 'POST
     when = new Date(eventAt).getTime()
     if (!Number.isFinite(when)) throw new Error('Choose the event date and time.')
   }
+  const gallery = images === undefined ? [] : images
+  if (!Array.isArray(gallery) || gallery.length > 5) throw new Error('Choose up to five images per post.')
+  if (gallery.some(src => typeof src !== 'string' || !IMAGE_TYPES.some(type => src.startsWith(`data:${type};base64,`)))) throw new Error('Choose valid JPEG, PNG, WebP or GIF images.')
+  if (gallery.reduce((size, src) => size + src.length * 0.75, 0) > 2 * 1024 * 1024) throw new Error('Keep the combined images below 2 MB.')
   const s = read()
   const post = {
     id: `p${s.nextId++}`, type, ...author(user, showName),
     // Posts without a category are treated as "Other".
     category: type === 'POST' ? (category && CATEGORIES.includes(category) ? category : DEFAULT_CATEGORY) : null,
     text: clean(text, MAX_TEXT),
+    images: gallery,
     image: image && IMAGE_TYPES.some((t) => image.startsWith(`data:${t};base64,`)) ? image : null,
     eventAt: when, location: type === 'EVENT' ? String(location ?? '').trim().slice(0, 120) : null,
     createdAt: Date.now(), status: 'VISIBLE',

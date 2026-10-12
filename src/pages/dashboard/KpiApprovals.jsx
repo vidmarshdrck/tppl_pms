@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { EntryBookApprovals } from '../../components/ui/EntryBooks.jsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card.jsx'
 import { StatusBadge } from '../../components/ui/StatusBadge.jsx'
 import { InlineMessage } from '../../components/ui/InlineMessage.jsx'
@@ -73,6 +74,8 @@ export default function KpiApprovals() {
       </div>
 
       {message && <InlineMessage tone={message.tone}>{message.text}</InlineMessage>}
+
+      <EntryBookApprovals />
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
         <Card>

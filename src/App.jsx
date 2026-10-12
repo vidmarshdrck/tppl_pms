@@ -2,17 +2,21 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext.jsx'
 import { hasPermission, homePath } from './auth/permissions.js'
 import DashboardLayout from './components/layout/DashboardLayout.jsx'
+import Tazai from './pages/dashboard/Tazai.jsx'
 import Login from './pages/Login.jsx'
 import Executive from './pages/dashboard/Executive.jsx'
 import BalancedScorecard from './pages/dashboard/BalancedScorecard.jsx'
 import DepartmentScorecards from './pages/dashboard/DepartmentScorecards.jsx'
 import StrategyMap from './pages/dashboard/StrategyMap.jsx'
+import ScorecardsWorkspace from './pages/dashboard/ScorecardsWorkspace.jsx'
 import Operations from './pages/dashboard/Operations.jsx'
 import Financial from './pages/dashboard/Financial.jsx'
 import KPIHeatmap from './pages/dashboard/KPIHeatmap.jsx'
 import Projects from './pages/dashboard/Projects.jsx'
-import Support from './pages/dashboard/Support.jsx'
+import Activities from './pages/dashboard/Activities.jsx'
+import CompanyActivities from './pages/dashboard/CompanyActivities.jsx'
 import DepartmentSupport from './pages/dashboard/DepartmentSupport.jsx'
+import TaskLinkedProjects from './pages/dashboard/TaskLinkedProjects.jsx'
 import Forum, { ForumFeed, ForumThread, ForumModeration } from './pages/dashboard/Forum.jsx'
 import Admin from './pages/dashboard/Admin.jsx'
 import KpiEntry from './pages/dashboard/KpiEntry.jsx'
@@ -35,12 +39,12 @@ function RequirePermission({ permission }) {
 
 function HomeRedirect() {
   const { user } = useAuth()
-  return <Navigate to={homePath(user)} replace />
+  return <Navigate to={window.matchMedia('(max-width: 767px)').matches ? '/tazai' : homePath(user)} replace />
 }
 
 function LoginRoute() {
   const { user } = useAuth()
-  return user ? <Navigate to={homePath(user)} replace /> : <Login />
+  return user ? <Navigate to={window.matchMedia('(max-width: 767px)').matches ? '/tazai' : homePath(user)} replace /> : <Login />
 }
 
 export default function App() {
@@ -49,10 +53,12 @@ export default function App() {
     <Route element={<ProtectedRoute />}>
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<HomeRedirect />} />
+        <Route path="tazai" element={<Tazai />} />
         <Route element={<RequirePermission permission="dashboard.department" />}>
           <Route path="my-department" element={<DepartmentScorecards />} />
         </Route>
         <Route element={<RequirePermission permission="forum.post" />}>
+          <Route path="profile" element={<Forum />}><Route index element={<ForumFeed profile />} /></Route>
           <Route path="forum" element={<Forum />}>
             <Route index element={<ForumFeed />} />
             <Route path="moderation" element={<ForumModeration />} />
@@ -60,7 +66,10 @@ export default function App() {
           </Route>
         </Route>
         <Route element={<RequirePermission permission="support.department" />}>
-          <Route path="activities" element={<DepartmentSupport />} />
+          <Route path="activities" element={<Activities basePath="/activities" />}>
+            <Route index element={<DepartmentSupport />} />
+            <Route path="projects" element={<TaskLinkedProjects />} />
+          </Route>
         </Route>
         <Route path="kpi" element={<Kpi />}>
           <Route index element={<KpiIndex />} />
@@ -76,14 +85,21 @@ export default function App() {
         </Route>
         <Route element={<RequirePermission permission="dashboard.org" />}>
           <Route path="executive" element={<Executive />} />
-          <Route path="scorecard" element={<BalancedScorecard />} />
+          <Route path="scorecards" element={<ScorecardsWorkspace />}>
+            <Route index element={<BalancedScorecard />} />
+            <Route path="strategy" element={<StrategyMap />} />
+          </Route>
+          <Route path="scorecard" element={<Navigate to="/scorecards" replace />} />
           <Route path="departments" element={<DepartmentScorecards />} />
-          <Route path="strategy" element={<StrategyMap />} />
+          <Route path="strategy" element={<Navigate to="/scorecards/strategy" replace />} />
           <Route path="operations" element={<Operations />} />
           <Route path="financial" element={<Financial />} />
           <Route path="heatmap" element={<Navigate to="/kpi/register" replace />} />
-          <Route path="projects" element={<Projects />} />
-          <Route path="support-overview" element={<Support />} />
+          <Route path="projects" element={<Navigate to="/support-overview/projects" replace />} />
+          <Route path="support-overview" element={<Activities />}>
+            <Route index element={<CompanyActivities />} />
+            <Route path="projects" element={<Projects />} />
+          </Route>
         </Route>
         <Route element={<RequirePermission permission="system.configure" />}>
           <Route path="admin" element={<Admin />} />

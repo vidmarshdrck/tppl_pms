@@ -1,4 +1,8 @@
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, LabelList, Legend } from 'recharts'
+import { bookReport } from '../../lib/entryBooks.js'
+import { useEntryBooks } from '../../lib/useEntryBooks.js'
+import { InlineMessage } from '../../components/ui/InlineMessage.jsx'
+import { filterSeriesByTimeframe } from '../../lib/reportingPeriod.js'
 import { Link } from 'react-router-dom'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card.jsx'
 import { TargetProgress } from '../../components/ui/KPIComparison.jsx'
@@ -85,13 +89,23 @@ const pmsDemoProject = {
 }
 
 export default function Executive() {
-  const { filteredMonthlyRevenue, periodLabel, timeframe } = useReportingPeriod()
+  const { filteredMonthlyRevenue: baselineMonthlyRevenue, periodLabel, timeframe } = useReportingPeriod()
+  const books = useEntryBooks()
+  const bookYear = timeframe.customYear ?? new Date().getFullYear()
+  const fullReport = bookReport(books, bookYear)
+  const selectedMonths = filterSeriesByTimeframe(Array.from({ length: 12 }, (_, index) => ({ index })), timeframe).map((month) => month.index)
+  const report = bookReport(books, bookYear, selectedMonths)
+  const hasFinance = fullReport.financeCount > 0
+  const hasOperations = fullReport.operationsCount > 0
+  const filteredMonthlyRevenue = hasFinance ? filterSeriesByTimeframe(report.months, timeframe) : baselineMonthlyRevenue
+  const revenueSeries = hasFinance ? report.quarters : quarterlyRevenue.map(row => row.isDemo ? { ...row, actual: null, target: null } : row)
+  const operationsSeries = hasOperations ? report.quarters : operationsChart.map(row => row.isDemo ? { ...row, received: null, distributed: null } : row)
   const priorityProjects = projects.filter((project) => getKpiPerformance(project.completion, project.target).tone !== 'green')
 
   // Every quarter-level chart/table on this page follows the same global
   // reporting-period control as every other dashboard (see the header).
   const selectedQuarters = quartersInTimeframe(timeframe)
-  const operationsInPeriod = operationsChart.filter((row) => selectedQuarters.includes(row.quarter))
+  const operationsInPeriod = operationsSeries.filter((row) => selectedQuarters.includes(row.quarter))
   const operationsQ1Q2 = operationsInPeriod.filter((r) => r.quarter === 'Q1' || r.quarter === 'Q2')
   const operationsQ3Q4 = operationsInPeriod.filter((r) => r.quarter === 'Q3' || r.quarter === 'Q4')
   // Purchasing — filtered to the selected quarters; within those, Q3/Q4 bars
@@ -105,7 +119,7 @@ export default function Executive() {
   // as Purchasing above). Labelled "Revenue" (not "Profit") because that is
   // what quarterlyRevenue actually contains — there is no separate profit
   // figure in the source data yet.
-  const revenueBars = quarterlyRevenue
+  const revenueBars = revenueSeries
     .filter((r) => selectedQuarters.includes(r.quarter))
     .flatMap((r) => [
       { label: `Target ${r.quarter}`, value: r.target, kind: 'target' },
@@ -118,17 +132,18 @@ export default function Executive() {
   // quarters (isDemo, see kpiData.js) are deliberately excluded here even
   // though the charts below show them — this header figure is presented as
   // a real management total and must never be inflated by illustrative data.
-  const reportedRevenue = quarterlyRevenue.filter((row) => selectedQuarters.includes(row.quarter) && row.actual !== null && row.target !== null && !row.isDemo)
+  const reportedRevenue = revenueSeries.filter((row) => selectedQuarters.includes(row.quarter) && row.actual !== null && row.target !== null && !row.isDemo)
   const totalActualRevenue = reportedRevenue.reduce((sum, row) => sum + row.actual, 0)
   const totalTargetRevenue = reportedRevenue.reduce((sum, row) => sum + row.target, 0)
 
   return <div className="space-y-6 animate-fade-in">
+    <InlineMessage tone="negative">{books.error}</InlineMessage>
     <section className="vpms-gradient rounded-xl p-5 sm:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#B42318] mb-2">Management brief · {companyInfo.shortName}</p><h2 className="text-xl font-bold text-slate-900 mb-2">Energy security through reliable service delivery</h2><p className="text-sm leading-6 text-slate-600">{companyInfo.vision}</p></div>
         <div className="hero-stats">
-          <div className="hero-stat"><div className="hero-stat-label">Revenue actual</div><div className="hero-stat-value">{formatKwacha(totalActualRevenue, true)}</div></div>
-          <div className="hero-stat"><div className="hero-stat-label">Revenue target</div><div className="hero-stat-value is-muted">{formatKwacha(totalTargetRevenue, true)}</div></div>
+          <div className="hero-stat"><div className="hero-stat-label">Revenue actual</div><div className="hero-stat-value">{reportedRevenue.length ? formatKwacha(totalActualRevenue, true) : '—'}</div></div>
+          <div className="hero-stat"><div className="hero-stat-label">Revenue target</div><div className="hero-stat-value is-muted">{reportedRevenue.length ? formatKwacha(totalTargetRevenue, true) : '—'}</div></div>
           <div className="hero-score">
             <div className="hero-stat-label whitespace-nowrap">Overall score</div>
             <div className="hero-score-value" style={{ color: scoreStatus(overallScore).color }}>{overallLabel}<span>%</span></div>
@@ -148,7 +163,7 @@ export default function Executive() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><TrendingUp size={16} className="text-[#B42318]" />Revenue trend · ZMW</CardTitle>
-            <p className="text-xs text-slate-500 mt-1">{periodLabel} · sample figures from the workbook template, pending Finance</p>
+            <p className="text-xs text-slate-500 mt-1">{periodLabel} · {hasFinance ? `${bookYear} · approved Finance entries; gaps mean no approved entry` : 'Strategic plan workbook'}</p>
           </CardHeader>
           <CardContent><ResponsiveContainer width="100%" height={250}><LineChart data={filteredMonthlyRevenue} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}><CartesianGrid vertical={false} stroke="#F1F5F9" /><XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748B' }} /><YAxis tickFormatter={(v) => formatKwacha(v, true)} tick={{ fontSize: 10, fill: '#64748B' }} width={55} /><Tooltip formatter={(v) => [formatKwacha(v, true), 'Actual']} /><Line type="monotone" dataKey="revenue" name="Actual" stroke="#B42318" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} /></LineChart></ResponsiveContainer></CardContent>
         </Card>
@@ -210,7 +225,7 @@ export default function Executive() {
                 return (
                   <tr key={row.key} className="border-b border-gray-50">
                     <td className="py-2.5 px-3 text-sm font-medium text-gray-800"><span className="inline-block w-2 h-2 rounded-full mr-2" style={{ background: row.color }} />{row.label}</td>
-                    <td className={`py-2.5 px-3 text-center text-xs font-bold rounded heat-${row.tone}`}>{row.score}%</td>
+                    <td className={`py-2.5 px-3 text-center text-xs font-bold rounded heat-${row.tone}`}>{row.score.toFixed(2)}%</td>
                     <td className="py-2.5 px-3 text-center">
                       {row.trend ? <TrendIcon size={14} className={`inline ${row.trend === 'up' ? 'text-green-600' : row.trend === 'down' ? 'text-red-600' : 'text-gray-400'}`} /> : <span className="text-gray-300">–</span>}
                     </td>
@@ -226,7 +241,7 @@ export default function Executive() {
 
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
       <Card>
-        <CardHeader><CardTitle>Operations · Product received vs distributed (m³)</CardTitle><p className="text-xs text-slate-500 mt-1">{periodLabel}</p></CardHeader>
+        <CardHeader><CardTitle>Operations · Product received vs distributed (m³)</CardTitle><p className="text-xs text-slate-500 mt-1">{periodLabel} · {hasOperations ? `${bookYear} · approved Operations entries, LSG and PMS combined` : 'Strategic plan workbook'}</p></CardHeader>
         <CardContent>
           {operationsQ1Q2.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>

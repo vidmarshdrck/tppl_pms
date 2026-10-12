@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Gauge, Building2, Waypoints, Activity, TrendingUp, FolderKanban, Headset, Menu, X, ShieldCheck, ClipboardList, MessagesSquare, ListChecks } from 'lucide-react'
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom'
+import { LayoutDashboard, Gauge, Building2, Activity, TrendingUp, Menu, X, ShieldCheck, ClipboardList, MessagesSquare, ListChecks, Sparkles } from 'lucide-react'
 import { companyInfo } from '../../data/kpiData.js'
 import { DataStatus } from '../ui/StatusBadge.jsx'
-import { ProfileMenu } from '../ui/ProfileMenu.jsx'
-import { NotesAssistant } from '../ui/NotesAssistant.jsx'
 import { HeaderTimeframePicker } from '../ui/HeaderTimeframePicker.jsx'
 import { ExportMenu } from '../ui/ExportMenu.jsx'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { hasPermission } from '../../auth/permissions.js'
 import { ReportingPeriodProvider } from '../../lib/ReportingPeriodContext.jsx'
+import { useProfilePhotos } from '../../lib/profilePhotos.js'
+import { useUserProfiles } from '../../lib/userProfiles.js'
 import { recordActivity } from '../../lib/activityLog.js'
 
 // Order follows how management actually uses it: the org-wide picture first
@@ -22,10 +22,9 @@ const navItems = [
   { path: '/financial', label: 'Financial', icon: TrendingUp },
   { path: '/departments', label: 'Departments', icon: Building2 },
   { path: '/kpi', label: 'KPI', icon: ClipboardList },
-  { path: '/scorecard', label: 'Balanced scorecard', icon: Gauge },
-  { path: '/strategy', label: 'Strategy map', icon: Waypoints },
-  { path: '/projects', label: 'Projects & actions', icon: FolderKanban },
-  { path: '/support-overview', label: 'Support', icon: Headset },
+  { path: '/scorecards', label: 'Scorecards', icon: Gauge },
+  { path: '/support-overview', label: 'Activities', icon: ListChecks },
+  { path: '/tazai', label: 'Tazai', icon: Sparkles },
   { path: '/forum', label: 'Forum', icon: MessagesSquare },
 ]
 
@@ -35,6 +34,7 @@ const departmentNavItems = [
   { path: '/my-department', label: 'My department', icon: Building2 },
   { path: '/kpi', label: 'KPI', icon: ClipboardList },
   { path: '/activities', label: 'Activities', icon: ListChecks },
+  { path: '/tazai', label: 'Tazai', icon: Sparkles },
   { path: '/forum', label: 'Forum', icon: MessagesSquare },
 ]
 
@@ -45,14 +45,19 @@ function initials(name = '') {
 export default function DashboardLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
   const mainRef = useRef(null)
   const location = useLocation()
   const { user } = useAuth()
+  const photos = useProfilePhotos()
+  const profiles = useUserProfiles()
+  const displayName = profiles[user.id]?.displayName || user.name
 
   const orgNav = hasPermission(user, adminNavItem.permission) ? [...navItems, adminNavItem] : navItems
   const visibleNavItems = hasPermission(user, 'dashboard.org') ? orgNav : departmentNavItems
-  const currentPage = visibleNavItems.find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.label || 'Dashboard'
+  const isSocial = location.pathname.startsWith('/forum') || location.pathname === '/profile'
+  const isTazai = location.pathname === '/tazai'
+  const mobileNav = [visibleNavItems[0], { path: '/kpi', label: 'KPI', icon: ClipboardList }, { path: '/tazai', label: 'Tazai', icon: Sparkles }, { path: user.departmentId ? '/activities' : '/support-overview', label: 'Activities', icon: ListChecks }, { path: '/forum', label: 'Forum', icon: MessagesSquare }]
+  const currentPage = location.pathname === '/profile' ? 'Profile' : visibleNavItems.find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.label || 'Dashboard'
 
   useEffect(() => {
     if (currentPage) recordActivity({ category: 'navigation', label: `Viewed ${currentPage}` })
@@ -104,20 +109,21 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="border-t border-slate-200 px-3 py-3">
-          <button
-            type="button"
-            onClick={() => setProfileOpen(true)}
+          <Link
+            to="/profile"
+            aria-label="Open profile"
+            onClick={() => setMobileOpen(false)}
             title={collapsed ? `${user?.name} · ${user?.role}` : undefined}
             className={`w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-100 transition-colors ${collapsed ? 'justify-center' : ''}`}
           >
-            <div className="w-8 h-8 rounded-full bg-[#FDECEC] text-[#B42318] flex items-center justify-center text-[10px] font-bold flex-shrink-0">{initials(user?.name)}</div>
+            <div className="w-8 h-8 rounded-full bg-[#FDECEC] text-[#B42318] flex items-center justify-center text-[10px] font-bold flex-shrink-0">{photos[user.id] ? <img src={photos[user.id]} alt="" className="h-full w-full rounded-full object-cover" /> : initials(displayName)}</div>
             {!collapsed && (
               <span className="min-w-0 text-left">
-                <span className="block text-xs font-semibold text-slate-800 truncate">{user?.name}</span>
+                <span className="block text-xs font-semibold text-slate-800 truncate">{displayName}</span>
                 <span className="block text-[10px] text-slate-500 truncate">{user?.role}</span>
               </span>
             )}
-          </button>
+          </Link>
         </div>
       </aside>
 
@@ -137,24 +143,26 @@ export default function DashboardLayout() {
               <h1 className="font-bold text-slate-900 text-lg leading-tight truncate">{currentPage}</h1>
             </div>
             <div className="ml-auto flex flex-shrink-0 items-center gap-2">
-              {hasPermission(user, 'dashboard.org') && <ExportMenu />}
-              <HeaderTimeframePicker />
+              {!isTazai && !isSocial && hasPermission(user, 'dashboard.org') && <ExportMenu />}
+              {!isTazai && !isSocial && <HeaderTimeframePicker />}
+              <Link to="/profile" aria-label="Open profile" className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#FDECEC] text-sm font-semibold text-[#B42318] lg:hidden">{photos[user.id] ? <img src={photos[user.id]} alt="" className="h-full w-full object-cover" /> : initials(displayName)}</Link>
             </div>
           </header>
-          <div className="px-4 sm:px-6 pt-4 flex-shrink-0">
+          {!isTazai && !isSocial && <div className="px-4 sm:px-6 pt-4 flex-shrink-0">
             <DataStatus source={companyInfo.dataSource} isProvisional={companyInfo.dataIsProvisional} />
-          </div>
-          <main ref={mainRef} className="flex-1 overflow-y-auto p-4 sm:p-6">
+          </div>}
+          <main ref={mainRef} className={isTazai ? "min-h-0 flex-1 overflow-hidden pb-[76px] md:pb-0" : "flex-1 overflow-y-auto p-4 pb-24 sm:p-6 md:pb-6"}>
             <Outlet />
           </main>
         </ReportingPeriodProvider>
       </div>
 
-      <ProfileMenu open={profileOpen} onClose={() => setProfileOpen(false)} />
-      {/* mainRef lets the Notes Assistant watch scroll position on the actual
-          scrolling element (<main>, not the window) to decide when to tuck
-          itself toward the edge — see NotesAssistant.jsx for the full heuristic. */}
-      <NotesAssistant scrollContainerRef={mainRef} />
+      <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[env(safe-area-inset-bottom)] md:hidden">
+        {mobileNav.map(({ path, label, icon: Icon }, index) => <NavLink key={path} to={path} className={({ isActive }) => `flex min-h-[72px] flex-col items-center justify-center gap-1 text-[11px] ${isActive ? 'text-[#B42318]' : 'text-slate-600'}`}>
+          {index === 2 ? <img src={`${import.meta.env.BASE_URL}tazai/smiling-professional.jpg`} alt="" className="h-8 w-8 rounded-full object-cover object-top" /> : <Icon size={21} />}<span>{index === 0 ? (user.departmentId ? 'Department' : 'Overview') : label}</span>
+        </NavLink>)}
+      </nav>
+      {!isTazai && <Link to="/tazai" aria-label="Open Tazai" title="Chat with Tazai" className={`fixed right-5 z-[55] ${isSocial ? 'bottom-40 md:bottom-24' : 'bottom-24 md:bottom-6'} h-14 w-14 overflow-hidden rounded-full shadow-lg md:right-5`}><img src={`${import.meta.env.BASE_URL}tazai/smiling-professional.jpg`} alt="Tazai" className="h-full w-full object-cover object-top" /></Link>}
     </div>
   )
 }

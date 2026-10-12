@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { DepartmentEntryBook } from '../../components/ui/EntryBooks.jsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card.jsx'
 import { StatusBadge } from '../../components/ui/StatusBadge.jsx'
 import { InlineMessage } from '../../components/ui/InlineMessage.jsx'
@@ -44,6 +45,7 @@ export default function KpiEntry() {
         <div>
           <h2 className="text-lg font-semibold text-slate-900">KPI entry · {department.name}</h2>
           <p className="text-sm text-slate-500">Enter this department's actual KPI figures, then submit them to the GM for approval.</p>
+          {user.role === 'Dept Head' && ['finance', 'operations'].includes(user.departmentId) && <a href="#department-entry-book" className="mt-2 inline-block text-sm font-semibold text-[#B42318] underline underline-offset-4">Open {user.departmentId === 'finance' ? 'Finance revenue' : 'Operations stock'} book</a>}
         </div>
         <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
           Reporting period
@@ -60,6 +62,7 @@ export default function KpiEntry() {
       {/* Keyed by (department, period): switching period mounts a fresh
           instance so its draft loads from lazy initial state rather than an
           effect reaching back to setState after mount. */}
+      <DepartmentEntryBook />
       <KpiEntryPeriod key={`${department.id}:${period}`} user={user} department={department} period={period} />
     </div>
   )
