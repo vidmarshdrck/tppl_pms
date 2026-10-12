@@ -9,6 +9,7 @@ const TABS = [
   { path: 'entry', label: 'KPI entry', permission: 'kpi.submit' },
   { path: 'register', label: 'KPI register', permission: 'dashboard.org' },
   { path: 'approvals', label: 'Approvals', permission: 'kpi.approve' },
+  { path: 'setup', label: 'KPI setup', permission: 'kpi.configure' },
 ]
 
 function useTabs() {
@@ -26,13 +27,13 @@ export default function Kpi() {
   return (
     <div className="space-y-5">
       {tabs.length > 1 && (
-        <div className="flex gap-1 border-b border-slate-200" role="tablist" aria-label="KPI sections">
+        <div className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="KPI sections">
           {tabs.map((tab) => (
             <NavLink
               key={tab.path}
               to={tab.path}
               role="tab"
-              className={({ isActive }) => `px-4 py-2 text-sm font-medium -mb-px border-b-2 ${isActive ? 'border-[#B42318] text-[#B42318]' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+              className={({ isActive }) => `shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium -mb-px border-b-2 ${isActive ? 'border-[#B42318] text-[#B42318]' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
               {tab.label}
             </NavLink>

@@ -13,6 +13,8 @@ import {
   financialKPIs, customerKPIs, internalKPIs, learningKPIs,
 } from '../../data/kpiData.js'
 import { getKpiPerformance } from '../../lib/dashboardMetrics.js'
+import { activatedKpiScore } from '../../lib/departmentsWithPublishedKpis.js'
+import { useKpiSubmissionsVersion } from '../../lib/useKpiSubmissionsVersion.js'
 import { scoreScorecard } from '../../lib/scorecard.js'
 import { scoreStatus } from '../../lib/scoreStatus.js'
 import { PERSPECTIVES, gmScorecard } from '../../data/scorecardData.js'
@@ -27,13 +29,6 @@ import {
 
 // Scores are derived live from the KPI data by the same engine as the
 // Balanced scorecard page, so the donut below always adds up to the overall.
-const { scores: perspectiveScores, overall: overallScore, contributions, shares } = scoreScorecard(PERSPECTIVES, gmScorecard.kpis)
-const overallLabel = Math.round(overallScore * 10) / 10
-const contributionSlices = [
-  ...PERSPECTIVES.map((p) => ({ name: p.name, value: contributions[p.key], color: p.color })),
-  { name: 'Gap to 100%', value: Math.max(0, 100 - overallScore), color: '#E2E8F0' },
-]
-
 // Overview scorecard table (GM brief format): perspective, current score,
 // trend, and a comment. Trend and comment are both derived from the same
 // data as the rest of the dashboard — no figures are invented for this
@@ -52,19 +47,6 @@ function perspectiveTrend(kpis) {
   if (Math.abs(delta) < 0.5) return 'flat'
   return delta > 0 ? 'up' : 'down'
 }
-const overviewRows = [
-  { key: 'financial', label: 'Financial', kpis: financialKPIs },
-  { key: 'customer', label: 'Customer', kpis: customerKPIs },
-  { key: 'internal', label: 'Internal Processes', kpis: internalKPIs },
-  { key: 'learning', label: 'Learning & Growth', kpis: learningKPIs },
-].map((row) => ({
-  ...row,
-  color: PERSPECTIVES.find((p) => p.key === row.key)?.color,
-  score: perspectiveScores[row.key],
-  tone: classifyKpi(perspectiveScores[row.key]),
-  trend: perspectiveTrend(row.kpis),
-}))
-
 // Projects donut: each project's share of total reported completion across
 // all projects — computed from the same `completion` figures used by the
 // per-project progress bars, not a separate budget/weight dataset.
@@ -95,6 +77,28 @@ export default function Executive() {
   const fullReport = bookReport(books, bookYear)
   const selectedMonths = filterSeriesByTimeframe(Array.from({ length: 12 }, (_, index) => ({ index })), timeframe).map((month) => month.index)
   const report = bookReport(books, bookYear, selectedMonths)
+  useKpiSubmissionsVersion()
+  const activeScore = activatedKpiScore(bookYear, selectedMonths)
+  const { scores: perspectiveScores, overall: overallScore, contributions, shares } = activeScore || scoreScorecard(PERSPECTIVES, gmScorecard.kpis)
+  const overallLabel = overallScore === null ? '—' : overallScore.toFixed(1)
+  const contributionSlices = [
+    ...PERSPECTIVES.map(p => ({ name: p.name, value: contributions[p.key] ?? 0, color: p.color })),
+    { name: 'Gap to 100%', value: overallScore === null ? 0 : Math.max(0, 100 - overallScore), color: '#E2E8F0' },
+  ]
+const overviewRows = [
+  { key: 'financial', label: 'Financial', kpis: financialKPIs },
+  { key: 'customer', label: 'Customer', kpis: customerKPIs },
+  { key: 'internal', label: 'Internal Processes', kpis: internalKPIs },
+  { key: 'learning', label: 'Learning & Growth', kpis: learningKPIs },
+].map((row) => ({
+  ...row,
+  color: PERSPECTIVES.find((p) => p.key === row.key)?.color,
+  score: perspectiveScores[row.key],
+  tone: classifyKpi(perspectiveScores[row.key]),
+  trend: activeScore ? null : perspectiveTrend(row.kpis),
+}))
+
+
   const hasFinance = fullReport.financeCount > 0
   const hasOperations = fullReport.operationsCount > 0
   const filteredMonthlyRevenue = hasFinance ? filterSeriesByTimeframe(report.months, timeframe) : baselineMonthlyRevenue
@@ -207,7 +211,7 @@ export default function Executive() {
         Quarterly revenue, and the Safety/HR/Engineering narrative lines the
         GM asked to see on the Executive overview. */}
     <Card>
-      <CardHeader><CardTitle>Overview</CardTitle><p className="text-xs text-slate-500 mt-1">Current score, trend since the prior reported quarter, and status per perspective</p></CardHeader>
+      <CardHeader><CardTitle>Overview</CardTitle><p className="text-xs text-slate-500 mt-1">{activeScore ? 'Approved department KPIs for the selected period; unreported results remain blank.' : 'Strategic plan scores and trend since the prior reported quarter.'}</p></CardHeader>
       <CardContent>
         <div className="table-wrap">
           <table className="dashboard-table">
@@ -225,7 +229,7 @@ export default function Executive() {
                 return (
                   <tr key={row.key} className="border-b border-gray-50">
                     <td className="py-2.5 px-3 text-sm font-medium text-gray-800"><span className="inline-block w-2 h-2 rounded-full mr-2" style={{ background: row.color }} />{row.label}</td>
-                    <td className={`py-2.5 px-3 text-center text-xs font-bold rounded heat-${row.tone}`}>{row.score.toFixed(2)}%</td>
+                    <td className={`py-2.5 px-3 text-center text-xs font-bold rounded heat-${row.tone}`}>{row.score === null ? '—' : `${row.score.toFixed(2)}%`}</td>
                     <td className="py-2.5 px-3 text-center">
                       {row.trend ? <TrendIcon size={14} className={`inline ${row.trend === 'up' ? 'text-green-600' : row.trend === 'down' ? 'text-red-600' : 'text-gray-400'}`} /> : <span className="text-gray-300">–</span>}
                     </td>

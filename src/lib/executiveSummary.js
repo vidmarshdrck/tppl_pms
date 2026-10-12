@@ -3,10 +3,11 @@
 // then renders it as CSV (opens in Excel) or printable HTML (save as PDF).
 // No dependencies, so it works in the IIS build without extra packages.
 
-import { PERSPECTIVES, REPORTED_MONTHS, gmScorecard } from '../data/scorecardData.js'
-import { periodAchievement, periodActual, scoreScorecard } from './scorecard.js'
+import { PERSPECTIVES, gmScorecard } from '../data/scorecardData.js'
+import { periodAchievement, periodActual, periodTarget, scoreScorecard } from './scorecard.js'
 import { scoreStatus, formatScore } from './scoreStatus.js'
-import { departmentsWithPublishedKpis } from './departmentsWithPublishedKpis.js'
+import { filterSeriesByTimeframe } from './reportingPeriod.js'
+import { departmentsWithPublishedKpis, activatedKpiScore } from './departmentsWithPublishedKpis.js'
 
 function fmt(value, unit) {
   if (value === null || value === undefined) return '—'
@@ -16,17 +17,12 @@ function fmt(value, unit) {
 }
 
 export function monthsForTimeframe(timeframe) {
-  const last = REPORTED_MONTHS - 1
-  const from = Math.min(timeframe.customFrom, last)
-  const to = Math.min(Math.max(timeframe.customFrom, timeframe.customTo), last)
-  const lo = Math.min(from, to)
-  const hi = Math.max(from, to)
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+  return filterSeriesByTimeframe(Array.from({ length: 12 }, (_, index) => ({ index })), timeframe).map(item => item.index)
 }
 
-export function buildExecutiveSummary({ periodLabel, months, generatedBy, now = new Date() }) {
-  const gm = scoreScorecard(PERSPECTIVES, gmScorecard.kpis)
-  const departments = departmentsWithPublishedKpis().map((dept) => {
+export function buildExecutiveSummary({ periodLabel, months, generatedBy, year = new Date().getFullYear(), now = new Date() }) {
+  const gm = activatedKpiScore(year, months) || scoreScorecard(PERSPECTIVES, gmScorecard.kpis)
+  const departments = departmentsWithPublishedKpis(year, months).map((dept) => {
     const kpis = dept.kpis.map((kpi) => ({ ...kpi, achievement: periodAchievement(kpi, months) }))
     return { id: dept.id, name: dept.name, kpis, ...scoreScorecard(PERSPECTIVES, kpis) }
   }).sort((a, b) => (b.overall ?? -1) - (a.overall ?? -1))
@@ -52,7 +48,7 @@ export function buildExecutiveSummary({ periodLabel, months, generatedBy, now = 
       perspective: PERSPECTIVES.find((p) => p.key === k.perspective)?.name ?? k.perspective,
       measure: k.name,
       weight: String(k.weight),
-      target: fmt(k.target, k.unit),
+      target: fmt(periodTarget(k, months), k.unit),
       actual: fmt(periodActual(k, months), k.unit),
       achievement: formatScore(k.achievement),
       status: scoreStatus(k.achievement).label,

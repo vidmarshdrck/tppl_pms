@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readChats, saveChats, prepareTaskRequest } from './tazai.js'
+import { readChats, saveChats, prepareTaskRequest, quickTazaiReply, scheduleTazaiNoteEmail, TAZAI_NOTE_EMAIL_DELAY } from './tazai.js'
 import { validateAttachments } from './attachments.js'
 import { createAssistantTask, listTasks, updateTask, addDepartmentProject, listDepartmentProjects, updateDepartmentProject } from './departmentTasks.js'
 import { importBookEntries, readBooks } from './entryBooks.js'
@@ -21,6 +21,18 @@ test('Tazai chat histories are scoped to the signed-in user', () => isolated(() 
   assert.equal(readChats(finance)[0].title, 'Private task request')
   assert.deepEqual(readChats(ict), [])
 }))
+test('quick Tazai answers in page context and directs complex requests to the full assistant', () => {
+  assert.match(quickTazaiReply('Where are my KPI targets?', finance, 'KPI'), /KPI entry/)
+  assert.match(quickTazaiReply('My printer is broken', finance, 'Executive overview'), /full Tazai/)
+  assert.match(quickTazaiReply('Hello', finance, 'Finance'), /Hello, Finance/)
+})
+test('Tazai queues note email ten minutes after the last edit', () => {
+  const schedule = scheduleTazaiNoteEmail('Check the revenue variance', { ...finance, email: 'finance_head@vpms.demo' }, 'Executive overview', 1000)
+  assert.equal(schedule.dueAt, 1000 + TAZAI_NOTE_EMAIL_DELAY)
+  assert.equal(schedule.email, 'finance_head@vpms.demo')
+  assert.equal(schedule.page, 'Executive overview')
+  assert.equal(scheduleTazaiNoteEmail('  ', { ...finance, email: 'finance_head@vpms.demo' }, 'KPI', 1000), null)
+})
 test('task preparation recognises issue type and preserves attachments', () => {
   const draft = prepareTaskRequest('Create a task for Operations: printer is broken', finance, departments, [file])
   assert.equal(draft.departmentId, 'operations'); assert.equal(draft.category, 'Printer Issues'); assert.equal(draft.affectedDepartment, 'Finance'); assert.deepEqual(draft.attachments, [file])

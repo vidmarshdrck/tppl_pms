@@ -45,7 +45,7 @@ function TazaiChat({ user }) {
     } else if (/\b(task|ticket|printer|network|password|issue|error|broken|not working|outage|laptop)\b/i.test(text)) {
       if (canCreate) { taskDraft = prepareTaskRequest(text, user, departments, attachments); reply = 'I’ve prepared a task request. Review its details and receiving department before creating it. Priority is assigned automatically.' }
       else reply = 'Your account has view access. Ask your department head to create this request.'
-    } else if (/\b(kpi|goal|target)\b/i.test(text)) reply = 'Open KPI to see the targets and enter actuals. The current targets come from the strategic-plan workbook; there is no goal-setting screen yet.'
+    } else if (/\b(kpi|goal|target)\b/i.test(text)) reply = 'The GM sets department targets under KPI → KPI setup, then activates them for a year and quarter. Department users enter actuals under KPI → KPI entry. Automatic actuals come from approved book entries for that period.'
     else if (/\b(hello|hi|hey|good morning)\b/i.test(text)) reply = `Hello, ${user.name.split(' · ')[0]}. I’m Tazai, your PMS task assistant. What would you like to follow up on today?`
     const response = { id: crypto.randomUUID(), role: 'assistant', text: reply, taskDraft }
     const now = new Date().toISOString()

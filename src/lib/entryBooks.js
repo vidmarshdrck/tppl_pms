@@ -1,3 +1,5 @@
+import { validateAttachments } from './attachments.js'
+
 // Browser-local demo records. Keep approval and aggregation here so the UI
 // can later use an API without changing the reporting rules.
 const KEY = 'vpms-entry-books-v1'
@@ -56,7 +58,7 @@ function prepareBookEntry(user, form, submit, store) {
   }
   const product = departmentId === 'operations' ? form.product : null
   if (store.entries.some((entry) => entry.id !== previous?.id && entry.departmentId === departmentId && entry.product === product && entry.start <= form.end && entry.end >= form.start)) throw new Error('This period overlaps an existing entry. Edit that entry to avoid counting the same figures twice.')
-  const entry = { ...previous, id: previous?.id || crypto.randomUUID(), departmentId, frequency: form.frequency, start: form.start, end: form.end, product, values, notes: String(form.notes || '').trim().slice(0, 1000), status: submit ? 'SUBMITTED' : 'DRAFT', createdBy: previous?.createdBy || actor(user), createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() }
+  const entry = { ...previous, id: previous?.id || crypto.randomUUID(), departmentId, frequency: form.frequency, start: form.start, end: form.end, product, values, attachments: validateAttachments(form.attachments === undefined ? previous?.attachments || [] : form.attachments), notes: String(form.notes || '').trim().slice(0, 1000), status: submit ? 'SUBMITTED' : 'DRAFT', createdBy: previous?.createdBy || actor(user), createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() }
   record(entry, user, submit ? 'Submitted for review' : 'Draft saved')
   if (previous) store.entries[store.entries.findIndex((item) => item.id === previous.id)] = entry
   else store.entries.push(entry)

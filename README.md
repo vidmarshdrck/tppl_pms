@@ -23,7 +23,7 @@ Other department prefixes: `pm`, `security`, `safety`, `hr`, `procurement`, `eng
 - Quarterly KPI submissions and approval; weekly Finance and Operations books with daily entry support. Approved book revisions feed executive summaries.
 - Excel worksheet preview, column mapping and draft entry import.
 - Department tasks, automatic ticket priorities, linked project progress and attachments.
-- Tazai personal chat history, guided task requests, attachments, voice notes and browser-supported dictation.
+- Tazai personal chat history, guided task requests, attachments, voice notes and browser-supported dictation. The floating portrait provides compact chat and notes on the current page; the sidebar opens the full workspace.
 - Staff forum with swipeable photo galleries, full-screen viewing, share links and integrity posters.
 - Personal profile page with photo, display name, bio and joining date. Login username stays separate.
 - Responsive mobile layout with five navigation buttons and Tazai in the centre.
@@ -32,7 +32,7 @@ Other department prefixes: `pm`, `security`, `safety`, `hr`, `procurement`, `eng
 
 This is a static preview with browser-based demo sign-in. Submissions, tasks, posts, profiles and chat history are saved in that browser's local storage; they are not shared across devices. Shared post links resolve only where the corresponding post exists. The workbook-derived historical figures and generated department examples are separate sources. Production database import and authenticated API integration remain pending.
 
-Tazai currently uses a guided task assistant. General AI answers, document understanding and live conversational voice require a future service. Annual budget workbooks can be previewed; annual budget and strategic goal import mappings remain pending. KPI targets currently live in `src/data/scorecardData.js`; there is no GM goal editor yet.
+Tazai currently uses a guided task assistant. Notes queue ten minutes after the last edit for the logged-in email address, but actual email delivery requires the future authenticated mail service. General AI answers, document understanding and live conversational voice require a future service. Annual budget workbooks can be previewed; annual budget and strategic goal import mappings remain pending. Initial KPI definitions come from `src/data/scorecardData.js`; the GM can revise reusable targets and activate quarterly copies under KPI → KPI setup.
 
 ## Development
 
@@ -49,3 +49,9 @@ npm run build
 Local preview: http://127.0.0.1:4300/. Build output: `dist/`.
 
 GitHub Actions deploys `main` to GitHub Pages. The build derives its base path from the repository name. The generated `404.html` lets the client router render deep links.
+
+## Department KPI setup
+
+As General Manager, open **KPI → KPI setup**. Define or edit each department’s reusable KPIs, review the targets and actual data sources, then activate them for the required year and quarter. Activation creates a fixed copy; later edits apply to future activations. Department users enter the assigned actuals and select **Submit**. GM approval publishes the results to the register, department scorecards, balanced scorecard and executive overview. Automatic actuals require approved Finance or Operations book entries for that same quarter.
+
+This preview saves definitions, activations, books and submissions in each browser. Shared production data and authorization require the planned database/API integration.

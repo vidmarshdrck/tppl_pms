@@ -22,7 +22,7 @@ export function ExportMenu() {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
   }, [open])
 
-  const model = () => buildExecutiveSummary({ periodLabel, months: monthsForTimeframe(timeframe), generatedBy: user.name })
+  const model = () => buildExecutiveSummary({ periodLabel, months: monthsForTimeframe(timeframe), generatedBy: user.name, year: timeframe.customYear })
   const slug = periodLabel.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()
 
   function downloadCsv() {

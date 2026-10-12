@@ -19,6 +19,7 @@ import DepartmentSupport from './pages/dashboard/DepartmentSupport.jsx'
 import TaskLinkedProjects from './pages/dashboard/TaskLinkedProjects.jsx'
 import Forum, { ForumFeed, ForumThread, ForumModeration } from './pages/dashboard/Forum.jsx'
 import Admin from './pages/dashboard/Admin.jsx'
+import KpiSetup from './pages/dashboard/KpiSetup.jsx'
 import KpiEntry from './pages/dashboard/KpiEntry.jsx'
 import KpiApprovals from './pages/dashboard/KpiApprovals.jsx'
 import Kpi, { KpiIndex } from './pages/dashboard/Kpi.jsx'
@@ -79,6 +80,7 @@ export default function App() {
           <Route element={<RequirePermission permission="dashboard.org" />}>
             <Route path="register" element={<KPIHeatmap />} />
           </Route>
+          <Route element={<RequirePermission permission="kpi.configure" />}><Route path="setup" element={<KpiSetup />} /></Route>
           <Route element={<RequirePermission permission="kpi.approve" />}>
             <Route path="approvals" element={<KpiApprovals />} />
           </Route>

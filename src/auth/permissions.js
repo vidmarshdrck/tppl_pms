@@ -40,6 +40,7 @@ const PERMISSION_ROLES = {
   'forum.announce': [ROLES.ADMIN, ROLES.GM],
   'support.department': DEPARTMENT_ONLY,
   'kpi.approve': [ROLES.GM],
+  'kpi.configure': [ROLES.GM],
   'dashboard.org': ORG_WIDE,
   'dashboard.department': DEPARTMENT_ONLY,
   'dashboard.view': [...ORG_WIDE, ...DEPARTMENT_ONLY],

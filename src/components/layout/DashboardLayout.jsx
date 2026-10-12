@@ -11,6 +11,7 @@ import { ReportingPeriodProvider } from '../../lib/ReportingPeriodContext.jsx'
 import { useProfilePhotos } from '../../lib/profilePhotos.js'
 import { useUserProfiles } from '../../lib/userProfiles.js'
 import { recordActivity } from '../../lib/activityLog.js'
+import { TazaiAssistant } from '../ui/TazaiAssistant.jsx'
 
 // Order follows how management actually uses it: the org-wide picture first
 // (Executive), then the two operating views day to day (Operations,
@@ -159,10 +160,10 @@ export default function DashboardLayout() {
 
       <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[env(safe-area-inset-bottom)] md:hidden">
         {mobileNav.map(({ path, label, icon: Icon }, index) => <NavLink key={path} to={path} className={({ isActive }) => `flex min-h-[72px] flex-col items-center justify-center gap-1 text-[11px] ${isActive ? 'text-[#B42318]' : 'text-slate-600'}`}>
-          {index === 2 ? <img src={`${import.meta.env.BASE_URL}tazai/smiling-professional.jpg`} alt="" className="h-8 w-8 rounded-full object-cover object-top" /> : <Icon size={21} />}<span>{index === 0 ? (user.departmentId ? 'Department' : 'Overview') : label}</span>
+          <Icon size={21} /><span>{index === 0 ? (user.departmentId ? 'Department' : 'Overview') : label}</span>
         </NavLink>)}
       </nav>
-      {!isTazai && <Link to="/tazai" aria-label="Open Tazai" title="Chat with Tazai" className={`fixed right-5 z-[55] ${isSocial ? 'bottom-40 md:bottom-24' : 'bottom-24 md:bottom-6'} h-14 w-14 overflow-hidden rounded-full shadow-lg md:right-5`}><img src={`${import.meta.env.BASE_URL}tazai/smiling-professional.jpg`} alt="Tazai" className="h-full w-full object-cover object-top" /></Link>}
+      {!isTazai && <TazaiAssistant scrollContainerRef={mainRef} currentPage={currentPage} social={isSocial} />}
     </div>
   )
 }
